@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Plant Care Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; background: #f2f2f7; margin: 0; padding: 20px; color: #1c1c1e; }
+        .header { margin-bottom: 30px; }
+        h1 { font-size: 34px; font-weight: 700; margin: 0; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .card label { font-size: 13px; font-weight: 600; color: #8e8e93; text-transform: uppercase; }
+        .card .value { font-size: 28px; font-weight: 700; margin-top: 5px; color: #007aff; }
+        .chart-container { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .good { background-color: #34c759; }
+        .bad { background-color: #ff3b30; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>My Plant</h1>
+        <p id="status-text"><span class="status-dot good"></span>System Online</p>
+    </div>
+
+    <div class="grid">
+        <div class="card">
+            <label>Soil Moisture</label>
+            <div class="value" id="soil-val">--%</div>
+        </div>
+        <div class="card">
+            <label>Temperature</label>
+            <div class="value" id="temp-val">--°C</div>
+        </div>
+        <div class="card">
+            <label>Humidity</label>
+            <div class="value" id="hum-val">--%</div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="historyChart"></canvas>
+    </div>
+
+    <script>
+        // --- CONFIGURATION ---
+        const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        async function fetchData() {
+            const { data, error } = await supabase
+                .from('readings')
+                .select('*')
+                .order('created_at', { ascending: false })
+                .limit(20);
+
+            if (data && data.length > 0) {
+                const latest = data[0];
+                document.getElementById('soil-val').innerText = latest.soil_moisture + '%';
+                document.getElementById('temp-val').innerText = latest.temperature + '°C';
+                document.getElementById('hum-val').innerText = latest.humidity + '%';
+                
+                // Alert if dry
+                if (latest.soil_moisture < 30) {
+                    document.getElementById('status-text').innerHTML = '<span class="status-dot bad"></span>Needs Water';
+                }
+
+                updateChart(data.reverse());
+            }
+        }
+
+        let chart;
+        function updateChart(data) {
+            const ctx = document.getElementById('historyChart').getContext('2d');
+            const labels = data.map(d => new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            const soilData = data.map(d => d.soil_moisture);
+
+            if (chart) chart.destroy();
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Soil Moisture %',
+                        data: soilData,
+                        borderColor: '#007aff',
+                        backgroundColor: 'rgba(0, 122, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true, plugins: { legend: { display: false } } }
+            });
+        }
+
+        fetchData();
+        setInterval(fetchData, 30000); // Refresh every 30s
+    </script>
+</body>
+</html>
