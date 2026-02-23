@@ -49,29 +49,41 @@
         // --- CONFIGURATION ---
         const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // This is where the conflict was happening:
+const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        async function fetchData() {
-            const { data, error } = await supabase
-                .from('readings')
-                .select('*')
-                .order('created_at', { ascending: false })
-                .limit(20);
+async function fetchData() {
+    try {
+        const { data, error } = await _supabase
+            .from('readings')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-            if (data && data.length > 0) {
-                const latest = data[0];
-                document.getElementById('soil-val').innerText = latest.soil_moisture + '%';
-                document.getElementById('temp-val').innerText = latest.temperature + '°C';
-                document.getElementById('hum-val').innerText = latest.humidity + '%';
-                
-                // Alert if dry
-                if (latest.soil_moisture < 30) {
-                    document.getElementById('status-text').innerHTML = '<span class="status-dot bad"></span>Needs Water';
-                }
+        if (error) throw error;
 
-                updateChart(data.reverse());
+        if (data && data.length > 0) {
+            const latest = data[0];
+            document.getElementById('soil-val').innerText = latest.soil_moisture + '%';
+            document.getElementById('temp-val').innerText = latest.temperature + '°C';
+            document.getElementById('hum-val').innerText = latest.humidity + '%';
+            
+            // Health Logic
+            const statusDot = document.querySelector('.status-dot');
+            if (latest.soil_moisture < 30) {
+                document.getElementById('status-text').innerText = 'Needs Water';
+                statusDot.className = 'status-dot bad';
+            } else {
+                document.getElementById('status-text').innerText = 'System Online';
+                statusDot.className = 'status-dot good';
             }
+
+            updateChart(data.reverse());
         }
+    } catch (err) {
+        console.error("Dashboard Error:", err.message);
+    }
+}
 
         let chart;
         function updateChart(data) {
