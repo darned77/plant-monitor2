@@ -3,114 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plant Care Dashboard</title>
+    <title>Plant Monitor</title>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body { font-family: -apple-system, sans-serif; background: #f2f2f7; margin: 0; padding: 20px; color: #1c1c1e; }
-        .header { margin-bottom: 30px; }
-        h1 { font-size: 34px; font-weight: 700; margin: 0; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
-        .card { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .card label { font-size: 13px; font-weight: 600; color: #8e8e93; text-transform: uppercase; }
-        .card .value { font-size: 28px; font-weight: 700; margin-top: 5px; color: #007aff; }
-        .chart-container { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .status-dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; margin-right: 8px; }
-        .good { background-color: #34c759; }
-        .bad { background-color: #ff3b30; }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="header">
-        <h1>My Plant</h1>
-        <p id="status-text"><span class="status-dot good"></span>System Online</p>
-    </div>
 
-    <div class="grid">
-        <div class="card">
-            <label>Soil Moisture</label>
-            <div class="value" id="soil-val">--%</div>
+    <nav class="system-header">
+        <div class="brand">
+            <h1>Plant <span class="weight-light">Monitor</span></h1>
         </div>
-        <div class="card">
-            <label>Temperature</label>
-            <div class="value" id="temp-val">--°C</div>
+        <div class="system-status">
+            <span id="connection-dot" class="status-indicator online"></span>
+            <span id="wateringStatus">System Active</span>
         </div>
-        <div class="card">
-            <label>Humidity</label>
-            <div class="value" id="hum-val">--%</div>
-        </div>
-    </div>
+    </nav>
 
-    <div class="chart-container">
-        <canvas id="historyChart"></canvas>
-    </div>
+    <main class="dashboard-container">
+        <section class="hero-zone">
+            <header class="hero-meta">
+                <p class="eyebrow">Active Monitoring</p>
+                <h2 class="device-title">Main Greenhouse <span class="serial">Unit 01</span></h2>
+            </header>
+
+            <div class="live-grid">
+                <div class="metric-block">
+                    <span class="metric-label">Soil Moisture</span>
+                    <span class="metric-value"><span id="soil">--</span><span class="unit">%</span></span>
+                    <div class="progress-track"><div id="soil-fill" class="fill" style="width: 0%;"></div></div>
+                </div>
+                <div class="metric-block">
+                    <span class="metric-label">Temperature</span>
+                    <span class="metric-value"><span id="temp">--</span><span class="unit">°C</span></span>
+                </div>
+                <div class="metric-block">
+                    <span class="metric-label">Air Humidity</span>
+                    <span class="metric-value"><span id="hum">--</span><span class="unit">%</span></span>
+                </div>
+            </div>
+        </section>
+
+        <section class="split-zone">
+            <div class="guidance-area">
+                <h3 class="section-title">System Guidance</h3>
+                <div id="alerts" class="alerts-container">
+                    <p class="empty-state">Environmental conditions are optimal.</p>
+                </div>
+            </div>
+
+            <div class="events-area">
+                <h3 class="section-title">Activity Log</h3>
+                <ul id="watering" class="activity-list">
+                    <li class="empty-state">Waiting for watering events...</li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="analytics-zone">
+            <div class="analytics-header">
+                <h3 class="section-title">Historical Trends</h3>
+                <div class="time-tabs">
+                    <button class="active">Live</button>
+                </div>
+            </div>
+            <div class="canvas-wrapper">
+                <canvas id="chart"></canvas>
+            </div>
+        </section>
+    </main>
 
     <script>
-        // --- CONFIGURATION ---
-        const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
-        // This is where the conflict was happening:
-const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        // --- CONFIG ---
+        const SUPABASE_URL = 'YOUR_SUPABASE_URL'; 
+        const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY';
+        
+        // Renamed to avoid the 'supabase has already been declared' error
+        const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        let floraChart;
 
-async function fetchData() {
-    try {
-        const { data, error } = await _supabase
-            .from('readings')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(20);
+        async function refresh() {
+            try {
+                // Fetch last 20 rows from Supabase
+                const { data: history, error } = await _supabase
+                    .from('readings')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(20);
 
-        if (error) throw error;
+                if (error) throw error;
+                if (!history || history.length === 0) return;
 
-        if (data && data.length > 0) {
-            const latest = data[0];
-            document.getElementById('soil-val').innerText = latest.soil_moisture + '%';
-            document.getElementById('temp-val').innerText = latest.temperature + '°C';
-            document.getElementById('hum-val').innerText = latest.humidity + '%';
-            
-            // Health Logic
-            const statusDot = document.querySelector('.status-dot');
-            if (latest.soil_moisture < 30) {
-                document.getElementById('status-text').innerText = 'Needs Water';
-                statusDot.className = 'status-dot bad';
-            } else {
-                document.getElementById('status-text').innerText = 'System Online';
-                statusDot.className = 'status-dot good';
+                const latest = history[0];
+
+                // Update UI Text
+                document.getElementById("soil").innerText = Math.round(latest.soil_moisture);
+                document.getElementById("temp").innerText = Math.round(latest.temperature);
+                document.getElementById("hum").innerText = Math.round(latest.humidity);
+                
+                // Update Progress Bar
+                document.getElementById("soil-fill").style.width = latest.soil_moisture + "%";
+
+                // Update Status & Guidance
+                const statusDiv = document.getElementById("wateringStatus");
+                const dot = document.getElementById("connection-dot");
+                const alertsDiv = document.getElementById("alerts");
+
+                if (latest.soil_moisture < 30) {
+                    statusDiv.innerText = "Needs Water";
+                    dot.className = "status-indicator active-pulse";
+                    alertsDiv.innerHTML = `<div class="alert-pill">Soil is dry (${latest.soil_moisture}%). Add water soon.</div>`;
+                } else {
+                    statusDiv.innerText = "System Active";
+                    dot.className = "status-indicator online";
+                    alertsDiv.innerHTML = `<p class="empty-state">Environmental conditions are optimal.</p>`;
+                }
+
+                updateChart([...history].reverse());
+
+            } catch (err) {
+                console.error("Flora OS Error:", err.message);
             }
-
-            updateChart(data.reverse());
-        }
-    } catch (err) {
-        console.error("Dashboard Error:", err.message);
-    }
-}
-
-        let chart;
-        function updateChart(data) {
-            const ctx = document.getElementById('historyChart').getContext('2d');
-            const labels = data.map(d => new Date(d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
-            const soilData = data.map(d => d.soil_moisture);
-
-            if (chart) chart.destroy();
-            chart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Soil Moisture %',
-                        data: soilData,
-                        borderColor: '#007aff',
-                        backgroundColor: 'rgba(0, 122, 255, 0.1)',
-                        fill: true,
-                        tension: 0.4
-                    }]
-                },
-                options: { responsive: true, plugins: { legend: { display: false } } }
-            });
         }
 
-        fetchData();
-        setInterval(fetchData, 30000); // Refresh every 30s
+        function updateChart(historyData) {
+            const labels = historyData.map(h => new Date(h.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            const soilData = historyData.map(h => h.soil_moisture);
+            const tempData = historyData.map(h => h.temperature);
+
+            if (!floraChart) {
+                const ctx = document.getElementById("chart").getContext("2d");
+                floraChart = new Chart(ctx, {
+                    type: "line",
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: "Soil %",
+                                data: soilData,
+                                borderColor: "#0071e3",
+                                backgroundColor: "rgba(0, 113, 227, 0.1)",
+                                fill: true,
+                                borderWidth: 2,
+                                pointRadius: 2,
+                                tension: 0.4
+                            },
+                            {
+                                label: "Temp °C",
+                                data: tempData,
+                                borderColor: "#ff9f0a",
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                tension: 0.4
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { grid: { display: false }, ticks: { color: "#86868b", font: { size: 10 } } },
+                            y: { grid: { color: "#f5f5f7" }, ticks: { color: "#86868b" } }
+                        }
+                    }
+                });
+            } else {
+                floraChart.data.labels = labels;
+                floraChart.data.datasets[0].data = soilData;
+                floraChart.data.datasets[1].data = tempData;
+                floraChart.update('none');
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 15000); // Update every 15 seconds
     </script>
 </body>
 </html>
