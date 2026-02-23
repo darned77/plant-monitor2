@@ -47,7 +47,7 @@
 
         <section class="analytics-zone">
             <div class="analytics-header">
-                <h3 class="section-title">24h Historical Trends</h3>
+                <h3 class="section-title">Historical Trends</h3>
             </div>
             <div class="canvas-wrapper">
                 <canvas id="chart"></canvas>
@@ -56,9 +56,11 @@
     </main>
 
     <script>
-        // --- CONFIG (Put your real details here) ---
+        // --- CONFIG ---
         const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
+        
+        // Initialize client once
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         
         let monitorChart;
@@ -72,31 +74,37 @@
                     .limit(20);
 
                 if (error) throw error;
-                if (!data || data.length === 0) return;
+                if (!data || data.length === 0) {
+                    console.log("Waiting for data...");
+                    return;
+                }
 
                 const latest = data[0];
 
-                // MAPPING DATA TO UI (Check column names match Supabase exactly)
-                document.getElementById("soil").innerText = Math.round(latest.soil_moisture) || "0";
-                document.getElementById("temp").innerText = Math.round(latest.temperature) || "0";
-                document.getElementById("hum").innerText = Math.round(latest.humidity) || "0";
+                // Update UI Elements
+                document.getElementById("soil").innerText = Math.round(latest.soil_moisture) ?? "--";
+                document.getElementById("temp").innerText = Math.round(latest.temperature) ?? "--";
+                document.getElementById("hum").innerText = Math.round(latest.humidity) ?? "--";
                 
-                // Update the Progress Bar
+                // Update Progress Bar
                 document.getElementById("soil-fill").style.width = (latest.soil_moisture || 0) + "%";
 
-                // Simple Visual Alert
+                // Visual Feedback
+                const statusText = document.getElementById("systemStatus");
+                const dot = document.getElementById("connection-dot");
+                
                 if (latest.soil_moisture < 25) {
-                    document.getElementById("systemStatus").innerText = "Soil Dry";
-                    document.getElementById("connection-dot").className = "status-indicator active-pulse";
+                    statusText.innerText = "Soil Dry - Needs Water";
+                    dot.className = "status-indicator active-pulse";
                 } else {
-                    document.getElementById("systemStatus").innerText = "System Active";
-                    document.getElementById("connection-dot").className = "status-indicator online";
+                    statusText.innerText = "System Active";
+                    dot.className = "status-indicator online";
                 }
 
                 updateChart([...data].reverse());
 
             } catch (err) {
-                console.error("Update Error:", err.message);
+                console.error("Dashboard Sync Error:", err.message);
             }
         }
 
@@ -112,8 +120,20 @@
                     data: {
                         labels,
                         datasets: [
-                            { label: "Soil %", data: soilPoints, borderColor: "#0071e3", tension: 0.4, fill: true, backgroundColor: "rgba(0, 113, 227, 0.05)" },
-                            { label: "Temp °C", data: tempPoints, borderColor: "#ff9f0a", tension: 0.4 }
+                            { 
+                                label: "Soil %", 
+                                data: soilPoints, 
+                                borderColor: "#0071e3", 
+                                backgroundColor: "rgba(0, 113, 227, 0.1)",
+                                tension: 0.4, 
+                                fill: true 
+                            },
+                            { 
+                                label: "Temp °C", 
+                                data: tempPoints, 
+                                borderColor: "#ff9f0a", 
+                                tension: 0.4 
+                            }
                         ]
                     },
                     options: {
@@ -121,7 +141,7 @@
                         maintainAspectRatio: false,
                         plugins: { legend: { display: false } },
                         scales: {
-                            y: { grid: { color: "#f5f5f7" } },
+                            y: { beginAtZero: true, grid: { color: "#f5f5f7" } },
                             x: { grid: { display: false } }
                         }
                     }
@@ -134,26 +154,25 @@
             }
         }
 
-        refresh();
-        setInterval(refresh, 10000); // Check for new data every 10 seconds
+        // Setup Realtime Subscription
+        const channel = _supabase
+            .channel('db-changes')
+            .on(
+                'postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'readings' },
+                (payload) => {
+                    console.log('New reading captured:', payload.new);
+                    refresh();
+                }
+            )
+            .subscribe();
 
-        // Add this below your refresh() function
-const channel = _supabase
-  .channel('schema-db-changes')
-  .on(
-    'postgres_changes',
-    {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'readings',
-    },
-    (payload) => {
-      console.log('New data received!', payload.new);
-      refresh(); // Force the UI to update immediately when a row is added
-    }
-  )
-  .subscribe();
+        // Initial Load
+        refresh();
+
+        // Safety fallback refresh every 30 seconds
+        setInterval(refresh, 30000); 
+
     </script>
 </body>
 </html>
-
