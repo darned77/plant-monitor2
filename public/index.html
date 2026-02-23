@@ -136,6 +136,24 @@
 
         refresh();
         setInterval(refresh, 10000); // Check for new data every 10 seconds
+
+        // Add this below your refresh() function
+const channel = _supabase
+  .channel('schema-db-changes')
+  .on(
+    'postgres_changes',
+    {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'readings',
+    },
+    (payload) => {
+      console.log('New data received!', payload.new);
+      refresh(); // Force the UI to update immediately when a row is added
+    }
+  )
+  .subscribe();
     </script>
 </body>
 </html>
+
