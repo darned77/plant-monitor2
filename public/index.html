@@ -57,14 +57,13 @@
 
     <script>
         const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
-        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
+        const SUPABASE_KEY = 'YOUR_KEY_HERE';
         const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         
         let monitorChart;
 
         async function refresh() {
             try {
-                // Fetch readings and the last watering event
                 const [readingRes, waterRes] = await Promise.all([
                     _supabase.from('readings').select('*').order('created_at', { ascending: false }).limit(20),
                     _supabase.from('watering_history').select('*').order('watered_at', { ascending: false }).limit(1)
@@ -73,7 +72,6 @@
                 const statusText = document.getElementById("systemStatus");
                 const dot = document.getElementById("connection-dot");
 
-                // 1. HEARTBEAT CHECK (Inactivity)
                 if (!readingRes.data || readingRes.data.length === 0) {
                     setOffline("No Data");
                     return;
@@ -83,22 +81,23 @@
                 const lastSeen = new Date(latest.created_at);
                 const secondsAgo = (new Date() - lastSeen) / 1000;
 
-                if (secondsAgo > 120) { // 2 Minutes
+                // 1. Inactivity Check
+                if (secondsAgo > 120) {
                     setOffline("System Inactive");
                     return;
                 }
 
-                // 2. UPDATE UI VALUES
+                // 2. Value Updates
                 document.getElementById("soil").innerText = Math.round(latest.soil_moisture);
                 document.getElementById("temp").innerText = Math.round(latest.temperature);
                 document.getElementById("hum").innerText = Math.round(latest.humidity);
                 document.getElementById("soil-fill").style.width = latest.soil_moisture + "%";
 
-                // 3. STATUS LOGIC (Watering vs Dry vs Good)
+                // 3. Status Logic
                 const lastWatered = waterRes.data?.[0] ? new Date(waterRes.data[0].watered_at) : null;
                 const wateredSecondsAgo = lastWatered ? (new Date() - lastWatered) / 1000 : 999999;
 
-                if (wateredSecondsAgo < 300) { // If watered in last 5 mins
+                if (wateredSecondsAgo < 300) { 
                     statusText.innerText = "Status: Watering Detected";
                     dot.className = "status-indicator active-pulse"; 
                 } else if (latest.soil_moisture < 25) {
@@ -110,10 +109,7 @@
                 }
 
                 updateChart([...readingRes.data].reverse());
-
-            } catch (err) {
-                console.error("Sync Error:", err.message);
-            }
+            } catch (err) { console.error(err); }
         }
 
         function setOffline(msg) {
@@ -156,11 +152,7 @@
             }
         }
 
-        const channel = _supabase.channel('db-changes').on('postgres_changes', 
-            { event: 'INSERT', schema: 'public', table: 'readings' }, 
-            () => refresh()
-        ).subscribe();
-
+        _supabase.channel('db-changes').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'readings' }, () => refresh()).subscribe();
         refresh();
         setInterval(refresh, 10000); 
     </script>
