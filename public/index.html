@@ -17,7 +17,7 @@
         </div>
         <div class="system-status">
             <span id="connection-dot" class="status-indicator online"></span>
-            <span id="systemStatus">Initializing...</span>
+            <span id="systemStatus">Connecting...</span>
         </div>
     </nav>
 
@@ -58,9 +58,9 @@
     <script>
         // --- CONFIG & INITIALIZATION ---
         const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
-        const SUPABASE_KEY = 'YOUR_KEY_HERE';
+        // I put your actual key back here:
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
 
-        // Initialize only if not already present to prevent Console Errors
         if (typeof _supabase === 'undefined') {
             var _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
         }
@@ -69,7 +69,6 @@
 
         async function refresh() {
             try {
-                console.log("Checking for updates...");
                 const [readingRes, waterRes] = await Promise.all([
                     _supabase.from('readings').select('*').order('created_at', { ascending: false }).limit(20),
                     _supabase.from('watering_history').select('*').order('watered_at', { ascending: false }).limit(1)
@@ -80,7 +79,6 @@
                 const statusText = document.getElementById("systemStatus");
                 const dot = document.getElementById("connection-dot");
 
-                // 1. HEARTBEAT LOGIC (Is ESP8266 Active?)
                 if (!readingRes.data || readingRes.data.length === 0) {
                     setOffline("No Data Found");
                     return;
@@ -90,18 +88,19 @@
                 const lastSeen = new Date(latest.created_at);
                 const secondsAgo = (new Date() - lastSeen) / 1000;
 
-                if (secondsAgo > 120) { // If no data for 2 minutes
+                // Inactivity Heartbeat (2 Minutes)
+                if (secondsAgo > 120) {
                     setOffline("System Inactive");
                     return;
                 }
 
-                // 2. ACTIVE STATE - Update UI
+                // Update UI
                 document.getElementById("soil").innerText = Math.round(latest.soil_moisture);
                 document.getElementById("temp").innerText = Math.round(latest.temperature);
                 document.getElementById("hum").innerText = Math.round(latest.humidity);
                 document.getElementById("soil-fill").style.width = latest.soil_moisture + "%";
 
-                // 3. STATUS DISPLAY LOGIC
+                // Status Logic
                 const lastWatered = waterRes.data?.[0] ? new Date(waterRes.data[0].watered_at) : null;
                 const wateredSecondsAgo = lastWatered ? (new Date() - lastWatered) / 1000 : 999999;
 
@@ -117,7 +116,6 @@
                 }
 
                 updateChart([...readingRes.data].reverse());
-
             } catch (err) { 
                 console.error("Dashboard Sync Error:", err.message); 
             }
@@ -163,21 +161,14 @@
             }
         }
 
-        // --- REALTIME SUBSCRIPTION ---
-        // Ensure you have enabled Realtime for the 'readings' table in Supabase Dashboard!
+        // Realtime Subscription
         _supabase.channel('db-changes').on('postgres_changes', 
             { event: 'INSERT', schema: 'public', table: 'readings' }, 
-            (payload) => {
-                console.log("New data received via Realtime!");
-                refresh();
-            }
+            () => refresh()
         ).subscribe();
 
-        // Run on load
         refresh();
-
-        // Safety interval to check for "System Inactive" state every 30 seconds
-        setInterval(refresh, 30000); 
+        setInterval(refresh, 15000); 
     </script>
 </body>
 </html>
