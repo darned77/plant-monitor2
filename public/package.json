@@ -4,5 +4,6 @@
   "type": "module",
   "dependencies": {
     "@supabase/supabase-js": "^2.0.0"
+    "resend": "^3.0.0"
   }
 }
