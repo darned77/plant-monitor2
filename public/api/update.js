@@ -35,7 +35,7 @@ export default async function handler(req, res) {
       // in your DB here to avoid spamming.
       await resend.emails.send({
         from: 'PlantMonitor <onboarding@resend.dev>',
-        to: 'stevemathew1306@gmail.com', // <--- PUT YOUR EMAIL HERE
+        to: 'stevemathew2006@gmail.com', // <--- PUT YOUR EMAIL HERE
         subject: '🚨 Plant Alert: Low Water!',
         html: `<p>Your plant is thirsty! Current moisture is <strong>${soil}%</strong>.</p>`
       });
