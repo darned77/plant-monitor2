@@ -56,9 +56,7 @@
     </main>
 
     <script>
-        // --- CONFIG & INITIALIZATION ---
         const SUPABASE_URL = 'https://ahikvdpxydhzqnvrogim.supabase.co'; 
-        // I put your actual key back here:
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFoaWt2ZHB4eWRoenFudnJvZ2ltIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NDc3NDcsImV4cCI6MjA4NzQyMzc0N30.jEnt6vWAQI9uWMwl1ahgRhsoJMP9bXBLfX8FBB_r0Hs';
 
         if (typeof _supabase === 'undefined') {
@@ -88,19 +86,16 @@
                 const lastSeen = new Date(latest.created_at);
                 const secondsAgo = (new Date() - lastSeen) / 1000;
 
-                // Inactivity Heartbeat (2 Minutes)
                 if (secondsAgo > 120) {
                     setOffline("System Inactive");
                     return;
                 }
 
-                // Update UI
                 document.getElementById("soil").innerText = Math.round(latest.soil_moisture);
                 document.getElementById("temp").innerText = Math.round(latest.temperature);
                 document.getElementById("hum").innerText = Math.round(latest.humidity);
                 document.getElementById("soil-fill").style.width = latest.soil_moisture + "%";
 
-                // Status Logic
                 const lastWatered = waterRes.data?.[0] ? new Date(waterRes.data[0].watered_at) : null;
                 const wateredSecondsAgo = lastWatered ? (new Date() - lastWatered) / 1000 : 999999;
 
@@ -134,6 +129,7 @@
             const labels = history.map(h => new Date(h.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
             const soilPoints = history.map(h => h.soil_moisture);
             const tempPoints = history.map(h => h.temperature);
+            const humPoints = history.map(h => h.humidity);
 
             if (!monitorChart) {
                 const ctx = document.getElementById("chart").getContext("2d");
@@ -143,25 +139,34 @@
                         labels,
                         datasets: [
                             { label: "Soil %", data: soilPoints, borderColor: "#0071e3", backgroundColor: "rgba(0, 113, 227, 0.1)", tension: 0.4, fill: true },
-                            { label: "Temp °C", data: tempPoints, borderColor: "#ff9f0a", tension: 0.4 }
+                            { label: "Temp °C", data: tempPoints, borderColor: "#ff9f0a", tension: 0.4 },
+                            { label: "Air Hum %", data: humPoints, borderColor: "#34c759", tension: 0.4 }
                         ]
                     },
                     options: {
                         responsive: true,
                         maintainAspectRatio: false,
-                        plugins: { legend: { display: false } },
-                        scales: { y: { beginAtZero: true }, x: { grid: { display: false } } }
+                        plugins: { 
+                            legend: { 
+                                display: true, 
+                                labels: { color: '#86868b', font: { size: 12, family: 'Inter' } } 
+                            } 
+                        },
+                        scales: { 
+                            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.03)' } }, 
+                            x: { grid: { display: false } } 
+                        }
                     }
                 });
             } else {
                 monitorChart.data.labels = labels;
                 monitorChart.data.datasets[0].data = soilPoints;
                 monitorChart.data.datasets[1].data = tempPoints;
+                monitorChart.data.datasets[2].data = humPoints;
                 monitorChart.update('none');
             }
         }
 
-        // Realtime Subscription
         _supabase.channel('db-changes').on('postgres_changes', 
             { event: 'INSERT', schema: 'public', table: 'readings' }, 
             () => refresh()
