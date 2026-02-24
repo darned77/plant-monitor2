@@ -5,22 +5,18 @@ import { Resend } from 'resend';
 const ENABLE_EMAIL_ALERTS = true; 
 const SOIL_THRESHOLD = 25; 
 const MY_EMAIL = "stevemathew2006@gmail.com"; 
+const ALERT_COOLDOWN_MINUTES = 60; // <--- Set to 1 hour
 
 export default async function handler(req, res) {
-  console.log("--- DEBUG START ---");
-  
-  // 1. FORGIVING DATA EXTRACTION
-  // This checks body, query, and common Case-Sensitive variations
+  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  // 1. Data Extraction
   let rawSoil = req.body?.soil ?? req.query?.soil ?? req.body?.Soil;
   let rawTemp = req.body?.temp ?? req.query?.temp ?? req.body?.Temp;
   let rawHum = req.body?.hum ?? req.query?.hum ?? req.body?.Hum;
 
-  console.log("Raw Received Data:", { rawSoil, rawTemp, rawHum });
-
-  // 2. DATA CLEANING (Removes spaces, units, or non-numeric garbage)
   const cleanNum = (val) => {
-    if (val === undefined || val === null) return NaN;
-    // Strip everything except numbers, dots, and minus signs
     const cleaned = String(val).replace(/[^0-9.-]/g, '');
     return parseFloat(cleaned);
   };
@@ -29,65 +25,66 @@ export default async function handler(req, res) {
   const temp = cleanNum(rawTemp);
   const hum = cleanNum(rawHum);
 
-  console.log(`Cleaned Values -> Soil: ${soil}, Temp: ${temp}, Hum: ${hum}`);
-
-  // 3. VALIDATION
-  if (isNaN(soil)) {
-    console.error("CRITICAL: Soil is still NaN. Payload was:", JSON.stringify(req.body));
-    return res.status(400).json({ 
-        error: "Soil value missing or invalid", 
-        debug_received: req.body 
-    });
-  }
-
-  const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  if (isNaN(soil)) return res.status(400).json({ error: "Invalid data" });
 
   try {
-    // 4. FETCH PREVIOUS MOISTURE
+    // 2. Fetch last readings to check for Watering and Email Cooldown
     const { data: lastReadings } = await supabase
       .from('readings')
-      .select('soil_moisture')
+      .select('soil_moisture, created_at')
       .order('created_at', { ascending: false })
       .limit(1);
 
-    const prevMoisture = lastReadings?.[0]?.soil_moisture || 0;
+    const latestEntry = lastReadings?.[0];
+    const prevMoisture = latestEntry?.soil_moisture || 0;
 
-    // 5. WATERING DETECTION
+    // 3. Watering Detection
     if (soil > prevMoisture + 10) {
-      console.log("Watering detected!");
       await supabase.from('watering_history').insert([
         { moisture_before: prevMoisture, moisture_after: soil }
       ]);
     }
 
-    // 6. EMAIL LOGIC (Wrapped in try/catch so it doesn't break the DB insert)
+    // 4. EMAIL ALERT WITH COOLDOWN
     if (ENABLE_EMAIL_ALERTS && soil < SOIL_THRESHOLD) {
-      try {
-        console.log("Sending alert email...");
-        await resend.emails.send({
-          from: 'PlantMonitor <onboarding@resend.dev>',
-          to: MY_EMAIL,
-          subject: '🚨 Plant Alert: Water Needed!',
-          html: `<p>Warning: Soil moisture is low (<strong>${soil}%</strong>).</p>`
-        });
-      } catch (mailErr) {
-        console.error("Mail Service Error (Skipped):", mailErr.message);
+      let shouldSend = true;
+
+      if (latestEntry) {
+        const lastAlertTime = new Date(latestEntry.created_at);
+        const now = new Date();
+        const minutesSinceLast = (now - lastAlertTime) / (1000 * 60);
+
+        // If the last reading was also "Dry" and was sent recently, skip email
+        if (latestEntry.soil_moisture < SOIL_THRESHOLD && minutesSinceLast < ALERT_COOLDOWN_MINUTES) {
+          console.log(`Skipping email. Last alert was only ${Math.round(minutesSinceLast)} mins ago.`);
+          shouldSend = false;
+        }
+      }
+
+      if (shouldSend) {
+        try {
+          await resend.emails.send({
+            from: 'PlantMonitor <onboarding@resend.dev>',
+            to: MY_EMAIL,
+            subject: '🚨 Plant Alert: Water Needed!',
+            html: `<p>Soil moisture is low (<strong>${soil}%</strong>). This is your hourly reminder.</p>`
+          });
+          console.log("Alert email sent.");
+        } catch (mailErr) {
+          console.error("Mail failed:", mailErr.message);
+        }
       }
     }
 
-    // 7. INSERT DATA
-    const { error: insertError } = await supabase.from('readings').insert([
+    // 5. Insert current reading
+    await supabase.from('readings').insert([
       { soil_moisture: soil, temperature: temp, humidity: hum }
     ]);
 
-    if (insertError) throw insertError;
-
-    console.log("--- SUCCESS ---");
     return res.status(200).json({ success: true });
 
   } catch (err) {
-    console.error("HANDLER CRASHED:", err.message);
+    console.error("Global Error:", err.message);
     return res.status(500).json({ error: err.message });
   }
 }
