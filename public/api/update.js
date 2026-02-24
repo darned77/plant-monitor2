@@ -4,7 +4,7 @@ import { Resend } from 'resend';
 // --- CONFIGURATION ---
 const ENABLE_EMAIL_ALERTS = true; 
 const SOIL_THRESHOLD = 25; 
-const MY_EMAIL = "your-email@example.com"; // <--- CHANGE THIS
+const MY_EMAIL = "stevemathew2006@gmail.com"; // <--- CHANGE THIS
 
 export default async function handler(req, res) {
   const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
