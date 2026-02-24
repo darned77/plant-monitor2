@@ -1,3 +1,14 @@
+export default async function handler(req, res) {
+  // THIS WILL SHOW IN VERCEL LOGS IMMEDIATELY
+  console.log("--- API TRIGGERED ---");
+  console.log("Method:", req.method);
+  console.log("Data Received:", JSON.stringify(req.body));
+  
+  const resendKey = process.env.RESEND_API_KEY ? "EXISTS" : "MISSING";
+  console.log("Resend Key Status:", resendKey);
+
+  // ... rest of your code
+
 import { createClient } from '@supabase/supabase-js';
 import { Resend } from 'resend';
 
