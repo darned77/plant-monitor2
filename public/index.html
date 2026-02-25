@@ -8,29 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
-
-    <!-- 🔴 Minimal inline style for SATURATED badge -->
-    <style>
-        .saturated-badge {
-            position: fixed;
-            top: 16px;
-            right: 20px;
-            background: #ff3b30;
-            color: white;
-            font-weight: 600;
-            font-size: 12px;
-            padding: 6px 12px;
-            border-radius: 999px;
-            letter-spacing: 0.6px;
-            display: none;
-            z-index: 999;
-        }
-    </style>
 </head>
 <body>
-
-    <!-- 🔴 SATURATED indicator -->
-    <div id="saturatedBadge" class="saturated-badge">SATURATED</div>
 
     <nav class="system-header">
         <div class="brand">
@@ -97,11 +76,9 @@
 
                 const statusText = document.getElementById("systemStatus");
                 const dot = document.getElementById("connection-dot");
-                const saturatedBadge = document.getElementById("saturatedBadge");
 
                 if (!readingRes.data || readingRes.data.length === 0) {
                     setOffline("No Data Found");
-                    saturatedBadge.style.display = "none";
                     return;
                 }
 
@@ -111,7 +88,6 @@
 
                 if (secondsAgo > 120) {
                     setOffline("System Inactive");
-                    saturatedBadge.style.display = "none";
                     return;
                 }
 
@@ -120,19 +96,16 @@
                 document.getElementById("hum").innerText = Math.round(latest.humidity);
                 document.getElementById("soil-fill").style.width = latest.soil_moisture + "%";
 
-                // 🔴 SATURATION LOGIC (ONLY CHANGE)
-                if (latest.soil_moisture > 75) {
-                    saturatedBadge.style.display = "block";
-                } else {
-                    saturatedBadge.style.display = "none";
-                }
-
                 const lastWatered = waterRes.data?.[0] ? new Date(waterRes.data[0].watered_at) : null;
                 const wateredSecondsAgo = lastWatered ? (new Date() - lastWatered) / 1000 : 999999;
 
+                // --- UPDATED STATUS LOGIC ---
                 if (wateredSecondsAgo < 300) { 
                     statusText.innerText = "Status: Watering Detected";
                     dot.className = "status-indicator active-pulse"; 
+                } else if (latest.soil_moisture > 75) {
+                    statusText.innerText = "Status: Saturated";
+                    dot.className = "status-indicator active-pulse"; // Blue pulse for saturation
                 } else if (latest.soil_moisture < 25) {
                     statusText.innerText = "Status: Soil Dry";
                     dot.className = "status-indicator active-pulse";
